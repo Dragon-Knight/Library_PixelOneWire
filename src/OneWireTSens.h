@@ -1,15 +1,13 @@
 #pragma once
 #include <inttypes.h>
-//#include "OneWireDriver.h"
+#include "OneWireDriver.h"
 
 // https://cdn-shop.adafruit.com/datasheets/DS18B20.pdf
 // https://www.analog.com/media/en/technical-documentation/data-sheets/DS18S20.pdf
 
-//template <uint8_t _max_sensor> 
+template <uint8_t _max_sensor> 
 class OneWireTSens
 {
-	static constexpr uint8_t _max_sensor = 16;
-	
 	public:
 		
 		static constexpr uint8_t CMD_CONVERT_T = 0x44;
@@ -168,6 +166,7 @@ class OneWireTSens
 		{
 			roms = _roms;
 			count = _roms_count;
+			
 			return _roms_count;
 		}
 		

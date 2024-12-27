@@ -1,9 +1,5 @@
 #pragma once
 #include <inttypes.h>
-#include "stm32f1xx_hal.h" // Замените на соответствующую версию для вашей STM32
-
-
-extern TIM_HandleTypeDef htim1;
 
 class OneWireDriver
 {
@@ -35,8 +31,8 @@ class OneWireDriver
 		};
 		
 		
-		OneWireDriver(GPIO_TypeDef *port, uint16_t pin) : 
-			_gpio_port(port), _gpio_pin(pin), 
+		OneWireDriver(GPIO_TypeDef *port, uint16_t pin, TIM_HandleTypeDef *htim) : 
+			_gpio_port(port), _gpio_pin(pin), _htim(htim),
 			_gpio_cfg{pin, GPIO_MODE_INPUT, GPIO_NOPULL, GPIO_SPEED_FREQ_HIGH}
 		{
 			// Инициализация пина как открытый сток
@@ -235,8 +231,8 @@ class OneWireDriver
 		
 		void _DelayUs(uint16_t us)
 		{
-			__HAL_TIM_SET_COUNTER(&htim1, 0);
-			while(__HAL_TIM_GET_COUNTER(&htim1) < us)
+			__HAL_TIM_SET_COUNTER(_htim, 0);
+			while(__HAL_TIM_GET_COUNTER(_htim) < us)
 			{
 				__NOP();
 			}
@@ -301,114 +297,6 @@ class OneWireDriver
 		
 		GPIO_TypeDef *_gpio_port;
 		uint16_t _gpio_pin;
+		TIM_HandleTypeDef *_htim;
 		GPIO_InitTypeDef _gpio_cfg;
 };
-
-
-#include "OneWireTSens.h"
-#include "OneWireTSensEx.h"
-
-
-
-
-// https://cdn-shop.adafruit.com/datasheets/DS18B20.pdf
-
-OneWireDriver oneWire(GPIOB, GPIO_PIN_9);
-OneWireTSensEx sensors(oneWire);
-
-// Пример использования
-int main1111() {
-
-
-
-
-
-	sensors.RegReadyCallback([](OneWireTSensEx::sensor_t *obj, uint8_t count) -> void
-	{
-		for(uint8_t i = 0; i < count; ++i)
-		{
-			Logger.Printf("Rom: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X, Temp: %05d°C, Valid: %d, Min: %d, Mid: %d, Max: %d", 
-			obj[i].rom->raw[0], obj[i].rom->raw[1], obj[i].rom->raw[2], obj[i].rom->raw[3], 
-			obj[i].rom->raw[4], obj[i].rom->raw[5], obj[i].rom->raw[6], obj[i].rom->raw[7], 
-			obj[i].temp, obj[i].valid, sensors.GetMinTemp(), sensors.GetMidTemp(), sensors.GetMaxTemp()).PrintNewLine();
-		}
-	});
-
-	while(1)
-	{
-		uint32_t time = HAL_GetTick();
-		sensors.Processing(time);
-	}
-
-/*
-	uint8_t fcount = sensors.Search();
-		Logger.Printf("Found count: %d", fcount).PrintNewLine();
-	
-    // Вывод ROM-кодов
-	OneWireDriver::rom_t *roms = {};
-	uint8_t roms_count = sensors.GetRomsPtr(roms);
-    for(uint8_t i = 0; i < roms_count; ++i)
-	{
-		DEBUG_LOG_ARRAY_HEX("1W ROM", roms[i].raw, 8);
-		DEBUG_LOG_NEW_LINE();
-	}
-	
-	// Чтение температур с найденных устройств
-	uint8_t read_state = 0;
-    while(1)
-	{
-		switch(read_state)
-		{
-			case 0:
-				sensors.Convert();
-				read_state = 1;
-				break;
-			
-			case 1:
-				int16_t temp[20];
-				uint8_t count = sensors.Read(temp, 20);
-				for(uint8_t i = 0; i < count; ++i)
-				{
-					Logger.Printf("Temperature %d°C", temp[i]).PrintNewLine();
-				}
-				read_state = 0;
-				break;
-		}
-		
-		HAL_Delay(1000);
-	}
-*/
-
-
-
-
-
-/*
-	OneWireDriver::rom_t roms[16];
-	uint8_t fcount = oneWire.SearchROM(roms, 16);
-
-
-    // Поиск всех ROM-кодов на линии
-    //searchROM(oneWire);
-	Logger.Printf("Found count: %d", fcount).PrintNewLine();
-	
-
-    // Вывод ROM-кодов
-    for (uint8_t i = 0; i < fcount; i++) {
-        //printf("Found ROM: 0x%016llX\n", rom);
-		Logger.Printf("Found ROM: 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X", roms[i].code,roms[i].sn[0],roms[i].sn[1],roms[i].sn[2],roms[i].sn[3],roms[i].sn[4],roms[i].sn[5],roms[i].crc).PrintNewLine();
-    }
-
-    // Чтение температур с найденных устройств
-    while (1) {
-        for (uint8_t i = 0; i < fcount; i++) {
-            int16_t temperature = sensors.ConvertAndRead(roms[i]);
-				Logger.Printf("Temperature [ROM 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X]: %d°C", roms[i].code,roms[i].sn[0],roms[i].sn[1],roms[i].sn[2],roms[i].sn[3],roms[i].sn[4],roms[i].sn[5],roms[i].crc, temperature).PrintNewLine();
-        }
-        HAL_Delay(1000); // Задержка между чтениями
-    }
-*/
-
-}
-
-

@@ -1,43 +1,46 @@
 #pragma once
 #include <inttypes.h>
 #include <CUtils.h>
-//#include "OneWireTSens.h"
+#include "OneWireTSens.h"
 
-class OneWireTSensEx : /*private*/public OneWireTSens
+template <uint8_t _max_sensor> 
+class OneWireTSensEx : private OneWireTSens<_max_sensor>
 {
-	static constexpr uint8_t _max_sensor = 16;
 	static constexpr uint16_t _tick = 30;
 	
 	public:
 
 		struct sensor_t
 		{
-			const OneWireDriver::rom_t *rom;	// 
+			const OneWireDriver::rom_t *rom;	// ROM код датчичка
 			bool active;						// Флаг найденного устройтва
 			bool valid;							// Флаг верных данных
-			//uint8_t id;							// ID устройства после поиска (для операций OneWireTSens)
 			int16_t temp;						// Текущая температура в сотых градуса
 		};
 		
 		using callback_ready_t = void (*)(sensor_t *sensors, uint8_t count);
 		
 		
-		OneWireTSensEx(OneWireDriver &driver) : OneWireTSens(driver), 
-			_callback_ready(nullptr), _state(STATE_INIT)
-		{}
-
+		OneWireTSensEx(OneWireDriver &driver) : OneWireTSens<_max_sensor>(driver), 
+			_callback_ready(nullptr), _last_tick(0), _state(STATE_INIT), _delay(0)
+		{
+			memset(_obj, 0x00, sizeof(_obj));
+			
+			return;
+		}
+		
 		void RegReadyCallback(callback_ready_t callback)
 		{
 			_callback_ready = callback;
 
 			return;
 		}
-
+		
 		
 		int16_t GetMinTemp()
 		{
-			int16_t min = OneWireTSens::NO_VALID_TEMP;
-			for(uint8_t i = 0; i < OneWireTSens::roms_count; ++i)
+			int16_t min = this->NO_VALID_TEMP;
+			for(uint8_t i = 0; i < this->roms_count; ++i)
 			{
 				if(_obj[i].valid == false) continue;
 				if(_obj[i].temp > min) continue;
@@ -52,7 +55,7 @@ class OneWireTSensEx : /*private*/public OneWireTSens
 		{
 			int32_t mid = 0;
 			uint8_t div = 0;
-			for(uint8_t i = 0; i < OneWireTSens::roms_count; ++i)
+			for(uint8_t i = 0; i < this->roms_count; ++i)
 			{
 				if(_obj[i].valid == false) continue;
 
@@ -60,16 +63,16 @@ class OneWireTSensEx : /*private*/public OneWireTSens
 				div++;
 			}
 			
-			return (div > 0) ? (mid / div) : OneWireTSens::NO_VALID_TEMP;
+			return (div > 0) ? (mid / div) : this->NO_VALID_TEMP;
 		}
 		
 		int16_t GetMaxTemp()
 		{
-			int16_t max = OneWireTSens::NO_VALID_TEMP;
-			for(uint8_t i = 0; i < OneWireTSens::roms_count; ++i)
+			int16_t max = this->NO_VALID_TEMP;
+			for(uint8_t i = 0; i < this->roms_count; ++i)
 			{
 				if(_obj[i].valid == false) continue;
-				if(_obj[i].temp < max && max != OneWireTSens::NO_VALID_TEMP) continue;
+				if(_obj[i].temp < max && max != this->NO_VALID_TEMP) continue;
 				
 				max = _obj[i].temp;
 			}
@@ -79,11 +82,11 @@ class OneWireTSensEx : /*private*/public OneWireTSens
 
 		uint8_t GetAllTemp(sensor_t *obj, uint8_t size)
 		{
-			if(size < OneWireTSens::roms_count)
+			if(size < this->roms_count)
 				return 0;
 			
 			uint8_t count = 0;
-			for(uint8_t i = 0; i < OneWireTSens::roms_count; ++i)
+			for(uint8_t i = 0; i < this->roms_count; ++i)
 			{
 				obj[i] = _obj[i];
 				count++;
@@ -101,20 +104,20 @@ class OneWireTSensEx : /*private*/public OneWireTSens
 			{
 				case STATE_INIT:
 				{
-					OneWireTSens::SearchFiltered();
-					for(uint8_t i = 0; i < OneWireTSens::roms_count; ++i)
+					this->SearchFiltered();
+					for(uint8_t i = 0; i < this->roms_count; ++i)
 					{
 						_obj[i].active = true;
-						_obj[i].rom = &OneWireTSens::roms[i];
+						_obj[i].rom = &this->roms[i];
 					}
 					
-					_state = (OneWireTSens::roms_count > 0) ? STATE_CONVERT : STATE_NO_SENSOR;
+					_state = (this->roms_count > 0) ? STATE_CONVERT : STATE_NO_SENSOR;
 					break;
 				}
 				
 				case STATE_CONVERT:
 				{
-					OneWireTSens::Convert();
+					this->Convert();
 					
 					_delay = ((800 + (_tick / 2)) / _tick);
 					
@@ -135,14 +138,14 @@ class OneWireTSensEx : /*private*/public OneWireTSens
 				
 				case STATE_READ:
 				{
-					int16_t temp = OneWireTSens::Read(_obj_idx);
+					int16_t temp = this->Read(_obj_idx);
 					_obj[_obj_idx].temp = temp;
-					_obj[_obj_idx].valid = (temp == OneWireTSens::NO_VALID_TEMP) ? false : true;
+					_obj[_obj_idx].valid = (temp == this->NO_VALID_TEMP) ? false : true;
 					
-					if(++_obj_idx == OneWireTSens::roms_count)
+					if(++_obj_idx == this->roms_count)
 					{
 						if(_callback_ready != nullptr)
-							_callback_ready(_obj, OneWireTSens::roms_count);
+							_callback_ready(_obj, this->roms_count);
 						
 						_delay = ((1000 + (_tick / 2)) / _tick);
 						_state = STATE_READ_WAIT;
@@ -182,19 +185,13 @@ class OneWireTSensEx : /*private*/public OneWireTSens
 			STATE_READ_WAIT,		// Ожидание после чтения
 			STATE_NO_SENSOR,		// Датчики не найдены
 		};
-
+		
 		callback_ready_t _callback_ready;
-
-		int16_t _temp[_max_sensor];
-		uint8_t _temp_count = 0;
+		
+		uint32_t _last_tick;
 		state_t _state;
 		int16_t _delay;
-
 		
-
-		uint32_t _last_tick;
-
 		sensor_t _obj[_max_sensor] = {};
 		uint8_t _obj_idx;
-
 };
