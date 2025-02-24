@@ -49,75 +49,64 @@ class OneWireDriver
 			uint8_t lastDiscrepancy = 0;
 			uint8_t romByte[8];
 			
+			memset(romByte, 0x00, sizeof(romByte));
+			
 			bool searchComplete = false;
-			while(searchComplete == false)
+			while(searchComplete == false && rom_idx < N)
 			{
-				if(Reset() == false) break;
+				if(Reset() == false)
+					break;
 				
-				memset(romByte, 0x00, sizeof(romByte));
-				
-				WriteByte( ((alarm == false) ? CMD_SEARCH_ROM : CMD_ALARM_SEARCH) );
+				WriteByte( (alarm ? CMD_ALARM_SEARCH : CMD_SEARCH_ROM) );
 				
 				uint8_t discrepancyMarker = 0;
-				for(uint8_t bitIndex = 0; bitIndex < 64; ++bitIndex)
+				
+				uint8_t bitIndex = 0;
+				while(bitIndex < 64)
 				{
+					uint8_t direction;
 					uint8_t bit = _ReadBit();
 					uint8_t complementBit = _ReadBit();
 					
-					// Линия в некорректном состоянии
 					if(bit && complementBit)
 					{
 						searchComplete = true;
+						
 						break;
 					}
 					
-					uint8_t direction = 0;
-					
 					if(!bit && !complementBit)
 					{
-						// Конфликт: выбираем направление
-						
-						if(bitIndex + 1 == lastDiscrepancy){
-							direction = 1;
-						}
-						else if(bitIndex + 1 > lastDiscrepancy){
-							direction = 0;
-						}
-						else{
+						if(bitIndex + 1 < lastDiscrepancy)
+						{
 							direction = (romByte[bitIndex / 8] >> (bitIndex % 8)) & 0x01;
 						}
-						
-						if(direction == 0)
+						else
 						{
-							discrepancyMarker = bitIndex + 1;
+							direction = (bitIndex + 1 == lastDiscrepancy) ? 1 : 0;
+							discrepancyMarker = (direction == 0) ? bitIndex + 1 : discrepancyMarker;
 						}
-					
-					} else {
-						// Нет конфликта, используем значение бита
-						
+					}
+					else
+					{
 						direction = bit;
 					}
 					
-					// Записываем бит в текущий байт ROM-кода
 					if(direction)
-					{
 						romByte[bitIndex / 8] |= (1 << (bitIndex % 8));
-					} else {
+					else
 						romByte[bitIndex / 8] &= ~(1 << (bitIndex % 8));
-					}
 					
 					_WriteBit(direction);
+					
+					bitIndex++;
 				}
 				
 				lastDiscrepancy = discrepancyMarker;
-				if(!lastDiscrepancy)
+				if(lastDiscrepancy == 0)
 					searchComplete = true;
 				
-				if( crc8(romByte, sizeof(romByte)-1) != romByte[7])
-					break;
-				
-				// Избегаем переполнения массива
-				if(rom_idx >= N)
+				if(crc8(romByte, sizeof(romByte)) != 0)
 					break;
 				
 				memcpy(&roms[rom_idx].raw, romByte, sizeof(romByte));
@@ -126,7 +115,6 @@ class OneWireDriver
 			
 			return rom_idx;
 		}
-		
 		
 		void CMD_MatchRom(const rom_t &romCode)
 		{
